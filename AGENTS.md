@@ -57,6 +57,9 @@ is NEVER touched (a rip may be in progress). Junk metadata excluded.
 
 ### TrueNAS - authoritative library (destination)
 - Host: `192.168.0.200` (web UI `http://192.168.0.200/`). SMB1 disabled.
+- Version: TrueNAS 25.10.4 (Community Edition, Linux-based; native Docker app
+  stack). CORE/FreeBSD is EOL and not in play. Hardware: Intel i3-6100T,
+  ~31 GiB RAM.
 - SMB share: `shared` (comment "pula wspoldzielona").
 - SMB auth: username `smb` + password from `pass` (see Credentials). The web-UI
   admin `truenas_admin` is a different user that shares the same password.
@@ -101,15 +104,23 @@ credentials file tracked by git.
 - Dev host has `smbclient`, `mount.cifs`, `nmblookup`. Both hosts on the LAN
   (Vault ~10 ms, TrueNAS ~2 ms). Use SMB2/SMB3 (`vers=3.0` / `vers=2.1`).
 - IMPORTANT: the current working machine is a DEVELOPMENT box, NOT the runtime
-  host for the job. Where the job actually runs is an open question below.
+  host for the job. The runtime host is the TrueNAS (see Hosting decision).
+
+## Hosting decision
+
+The transfer job runs ON the TrueNAS (confirmed 25.10.4, Linux-based, native
+Docker) as a **Custom App (Docker Compose)**, with a **Host Path bind mount to a
+dataset in the pool** for scripts, state, and logs. Rationale: the app config
+lives in the TrueNAS config DB and survives OS upgrades, while anything on the
+boot-pool/OS filesystem is wiped on upgrade - persistent files MUST live on a
+pool dataset. Running on the Vault is ruled out (locked BlueOS appliance); the
+current dev box is development only.
+
+SMB access from the container: either the native SMB/CIFS volume type or a
+custom image bundling rclone/smbclient (base images usually lack smbclient).
 
 ## Open questions / decisions pending
 
-- Runtime host (where the transfer job actually runs):
-  - On the Vault (BlueOS is a locked appliance - running custom scripts is
-    likely NOT possible; to confirm).
-  - On the TrueNAS (native cron jobs / apps / containers - leading candidate).
-  - NOT the current dev machine (development only).
 - Trigger model: scheduled poll (cron / systemd timer) vs an event/trigger.
   BlueOS provides no "rip finished" event, so completion must be inferred.
 - Rip-completion detection: how to know a CD's rip is finished and stable before
