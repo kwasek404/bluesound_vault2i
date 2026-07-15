@@ -18,6 +18,14 @@
   var pendingReindexEl = document.getElementById("pending-reindex");
   var lastReindexEl = document.getElementById("last-reindex");
   var logEl = document.getElementById("log");
+  var transferEl = document.getElementById("transfer");
+  var transferBarEl = document.getElementById("transfer-bar");
+  var transferPercentEl = document.getElementById("transfer-percent");
+  var transferPhaseEl = document.getElementById("transfer-phase");
+  var transferFileEl = document.getElementById("transfer-file");
+  var transferFilesEl = document.getElementById("transfer-files");
+  var transferSpeedEl = document.getElementById("transfer-speed");
+  var transferEtaEl = document.getElementById("transfer-eta");
 
   var ACTION_LABELS = {
     skipped_busy: "Vault zajęty - pomijam",
@@ -26,9 +34,11 @@
     partial_retry: "Część plików czeka na ponowną próbę",
     transfer_error: "Błąd transferu - sprawdź log",
     verify_empty: "Brak plików do weryfikacji",
-    copy_error: "Błąd kopiowania - sprawdź log",
-    delete_error: "Błąd kasowania źródła - sprawdź log",
-    verify_mismatch: "Rozbieżność weryfikacji - ponawiam",
+  };
+
+  var TRANSFER_PHASE_LABELS = {
+    copy: "Kopiowanie",
+    verify: "Weryfikacja",
   };
 
   function textOrDash(value) {
@@ -140,6 +150,67 @@
 
     pendingReindexEl.textContent = boolToTakNie(status.pending_reindex);
     lastReindexEl.textContent = textOrBrak(status.last_reindex_at);
+
+    renderTransfer(status.transfer);
+  }
+
+  function formatSpeed(bytesPerSec) {
+    if (!bytesPerSec || bytesPerSec <= 0) {
+      return "-";
+    }
+    if (bytesPerSec >= 1e6) {
+      return (bytesPerSec / 1e6).toFixed(1) + " MB/s";
+    }
+    if (bytesPerSec >= 1e3) {
+      return (bytesPerSec / 1e3).toFixed(1) + " KB/s";
+    }
+    return bytesPerSec.toFixed(0) + " B/s";
+  }
+
+  function formatEta(seconds) {
+    if (seconds === null || seconds === undefined || seconds < 0) {
+      return "-";
+    }
+    var totalSeconds = Math.floor(seconds);
+    var hrs = Math.floor(totalSeconds / 3600);
+    var mins = Math.floor((totalSeconds % 3600) / 60);
+    var secs = totalSeconds % 60;
+    var secsStr = secs < 10 ? "0" + secs : String(secs);
+    if (hrs > 0) {
+      var minsStr = mins < 10 ? "0" + mins : String(mins);
+      return hrs + ":" + minsStr + ":" + secsStr;
+    }
+    return mins + ":" + secsStr;
+  }
+
+  function renderTransfer(transfer) {
+    if (!transfer || transfer.active !== true) {
+      transferEl.hidden = true;
+      return;
+    }
+
+    transferEl.hidden = false;
+
+    var percent = transfer.percent;
+    if (typeof percent !== "number" || isNaN(percent)) {
+      percent = 0;
+    }
+    percent = Math.max(0, Math.min(100, percent));
+
+    transferBarEl.value = percent;
+    transferPercentEl.textContent = percent + "%";
+    transferPhaseEl.textContent =
+      TRANSFER_PHASE_LABELS[transfer.phase] || textOrDash(transfer.phase);
+    transferFileEl.textContent = textOrDash(transfer.current_file);
+
+    if (transfer.files_done === undefined || transfer.files_total === undefined) {
+      transferFilesEl.textContent = "-";
+    } else {
+      transferFilesEl.textContent = transfer.files_done + " / " + transfer.files_total;
+    }
+
+    transferSpeedEl.textContent = formatSpeed(transfer.speed);
+    transferEtaEl.textContent = formatEta(transfer.eta_seconds);
   }
 
   function renderLog(logData) {

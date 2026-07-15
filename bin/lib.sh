@@ -71,6 +71,12 @@ trigger_reindex() {
         "http://${VAULT_HOST}:${VAULT_API_PORT}/Reindex" -d 'reindex=1'
 }
 
+# set_phase <phase> - record the current mover phase (copy|verify|delete|idle)
+# for the status UI to poll.
+set_phase() {
+    printf '%s\n' "$1" > "${STATE_DIR}/phase" 2>/dev/null || true
+}
+
 # state_read <jq-path> - read a value from STATE_DIR/state.json (treated as
 # {} if the file is missing). Prints an empty string if the path is
 # null/missing.

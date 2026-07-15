@@ -16,6 +16,30 @@
 <p id="connection-note" class="connection-note" hidden>(brak połączenia z serwerem statusu)</p>
 
 <main>
+  <section id="transfer" class="card" hidden>
+    <h2>Transfer w toku</h2>
+    <div class="progress-row">
+      <progress id="transfer-bar" max="100" value="0"></progress>
+      <span id="transfer-percent">0%</span>
+    </div>
+    <dl class="fields">
+      <dt>Faza</dt>
+      <dd id="transfer-phase">-</dd>
+
+      <dt>Plik</dt>
+      <dd id="transfer-file">-</dd>
+
+      <dt>Postęp</dt>
+      <dd id="transfer-files">-</dd>
+
+      <dt>Prędkość</dt>
+      <dd id="transfer-speed">-</dd>
+
+      <dt>Pozostało (ETA)</dt>
+      <dd id="transfer-eta">-</dd>
+    </dl>
+  </section>
+
   <section class="card">
     <h2>Stan urządzenia</h2>
     <dl class="fields">

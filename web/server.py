@@ -25,11 +25,16 @@ LOG_TAIL_LINES = int(os.environ.get("LOG_TAIL_LINES", "200"))
 
 STATE_FILE = STATE_DIR / "state.json"
 LOG_FILE = LOG_DIR / "mover.log"
+PHASE_FILE = STATE_DIR / "phase"
 
 VAULT_STATUS_URL = (
     f"http://{VAULT_HOST}:{VAULT_STATUS_PORT}/ripencstat?noheader=1"
 )
 VAULT_STATUS_TIMEOUT_SECS = 5
+
+RC_ADDR = os.environ.get("RCLONE_RC_ADDR", "127.0.0.1:5572")
+RC_STATS_TIMEOUT_SECS = 2
+RC_PHASES = {"copy", "verify", "delete", "idle"}
 
 DEFAULT_STATE = {
     "updated_at": None,
@@ -79,6 +84,82 @@ def fetch_live_vault_idle():
         return "No CD inserted." in body and "No tracks to encode." in body
     except (urllib.error.URLError, OSError, ValueError):
         return None
+
+
+def read_phase():
+    """Read the mover's current phase marker (copy/verify/delete/idle).
+
+    Never raises; falls back to "idle" on any error or unknown content.
+    """
+    try:
+        with open(PHASE_FILE, "r", encoding="utf-8") as f:
+            phase = f.read().strip().lower()
+        return phase if phase in RC_PHASES else "idle"
+    except OSError:
+        return "idle"
+
+
+def _entry_name(entry):
+    """Extract a display name from an rclone rc transferring/checking entry."""
+    return entry.get("name") if isinstance(entry, dict) else str(entry)
+
+
+def fetch_transfer_progress():
+    """Poll rclone's rc core/stats endpoint for live transfer progress.
+
+    Returns {"active": False, "phase": <phase>} when no rclone op is running
+    (rc port closed) or on any error. Returns a richer dict when an rclone
+    operation is actively reporting stats.
+    """
+    phase = read_phase()
+    try:
+        req = urllib.request.Request(
+            "http://%s/core/stats" % RC_ADDR,
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=RC_STATS_TIMEOUT_SECS) as resp:
+            stats = json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError):
+        return {"active": False, "phase": phase}
+
+    bytes_done = int(stats.get("bytes", 0) or 0)
+    total_bytes = int(stats.get("totalBytes", 0) or 0)
+    speed = float(stats.get("speed", 0) or 0)
+    eta = stats.get("eta", None)
+    transfers = int(stats.get("transfers", 0) or 0)
+    total_transfers = int(stats.get("totalTransfers", 0) or 0)
+    checks = int(stats.get("checks", 0) or 0)
+    total_checks = int(stats.get("totalChecks", 0) or 0)
+    transferring = stats.get("transferring") or []
+    checking = stats.get("checking") or []
+
+    if phase == "verify":
+        files_done = checks
+        files_total = total_checks
+        current_file = _entry_name(checking[0]) if checking else None
+    else:
+        files_done = transfers
+        files_total = total_transfers
+        current_file = _entry_name(transferring[0]) if transferring else None
+
+    percent = int(bytes_done * 100 / total_bytes) if total_bytes > 0 else 0
+    percent = max(0, min(100, percent))
+    eta_seconds = int(eta) if isinstance(eta, (int, float)) else None
+
+    return {
+        "active": True,
+        "phase": phase,
+        "percent": percent,
+        "bytes": bytes_done,
+        "total_bytes": total_bytes,
+        "speed": speed,
+        "eta_seconds": eta_seconds,
+        "files_done": files_done,
+        "files_total": files_total,
+        "current_file": current_file,
+    }
 
 
 def read_log_tail():
@@ -143,6 +224,7 @@ class StatusRequestHandler(BaseHTTPRequestHandler):
         response = dict(state)
         response["state_available"] = state_available
         response["live_vault_idle"] = fetch_live_vault_idle()
+        response["transfer"] = fetch_transfer_progress()
         self._send_json(200, response)
 
     def _handle_api_log(self):

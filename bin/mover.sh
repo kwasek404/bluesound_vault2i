@@ -37,6 +37,10 @@ DST="truenas:${SMB_SHARE}/${DST_SUBPATH}"
 RCLONE_HDD_FLAGS=(--transfers 1 --checkers 1 --multi-thread-streams 1)
 RCLONE_RETRY_FLAGS=(--retries 3 --low-level-retries 10 --retries-sleep 30s)
 RCLONE_LOG_FLAGS=(--use-json-log --log-file "${LOG_DIR}/rclone.log" --log-level INFO)
+# Localhost-only rclone remote-control API for live progress (copy/check stages).
+# Address is env-overridable and must match web/server.py's RCLONE_RC_ADDR default.
+RCLONE_RC_ADDR="${RCLONE_RC_ADDR:-127.0.0.1:5572}"
+RCLONE_RC_FLAGS=(--rc --rc-addr "${RCLONE_RC_ADDR}" --rc-no-auth)
 
 # --- 1. previous state -----------------------------------------------------
 prev_idle_streak="$(state_read '.idle_streak')"
@@ -91,9 +95,10 @@ else
     # a partial copy still transferred the other files, and the per-file
     # verification below decides what is safe to delete. One bad file never
     # blocks the rest.
+    set_phase copy
     log "INFO" "Starting copy: ${SRC} -> ${DST}"
     rclone copy "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" \
-        "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" "${SRC}" "${DST}"
+        "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" "${RCLONE_RC_FLAGS[@]}" "${SRC}" "${DST}"
     copy_rc=$?
     if [[ "${copy_rc}" -ne 0 ]]; then
         log "WARN" "rclone copy returned ${copy_rc} (partial) - verification will sort files per-file"
@@ -108,9 +113,10 @@ else
     : > "${missing_file}"
     : > "${errors_file}"
 
+    set_phase verify
     log "INFO" "Starting verification check: ${SRC} -> ${DST}"
     rclone check --download --one-way "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" \
-        "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" \
+        "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" "${RCLONE_RC_FLAGS[@]}" \
         --match "${matched_file}" --differ "${differ_file}" \
         --missing-on-dst "${missing_file}" --error "${errors_file}" \
         "${SRC}" "${DST}"
@@ -128,6 +134,7 @@ else
     # the deletion of files that WERE byte-verified this pass.
     delete_error=0
     if [[ "${verified}" -gt 0 ]]; then
+        set_phase delete
         log "INFO" "Deleting ${verified} byte-verified files from vault source"
         # No --exclude here: --files-from lists the exact files (already
         # exclude-filtered by the check above), and rclone forbids combining
@@ -170,7 +177,7 @@ fi
 # --- 8. reindex, only once, after a confirmed full drain --------------------
 if [[ "${pending_reindex}" == "true" && "${idle_confirmed}" == "true" && "${pending_files}" -eq 0 ]]; then
     if trigger_reindex >/dev/null; then
-        last_reindex_at="${now}"
+        last_reindex_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         pending_reindex="false"
         log "INFO" "Triggered Vault reindex"
     else
@@ -210,6 +217,7 @@ last_run_at="${now}"
 last_run_action="${action}"
 
 write_state
+set_phase idle
 
 log "INFO" "Pass complete: action=${action} pending_files=${pending_files} idle_streak=${idle_streak} safe=${safe}"
 
