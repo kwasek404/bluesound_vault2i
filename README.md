@@ -52,15 +52,24 @@ One pass runs every `POLL_INTERVAL` seconds, single-instance enforced via
    `No CD inserted.` and `No tracks to encode.`. Any other content, or a
    fetch failure, is treated as busy and the pass waits. `IDLE_CONFIRMATIONS`
    consecutive idle polls are required before acting (fail-safe).
-2. **Stage 1 - copy**: `rclone copy` (no deletion).
+2. **Stage 1 - copy**: `rclone copy` (no deletion), not run with
+   `--immutable`. The Vault source is authoritative and is never deleted
+   until byte-verified on the destination, so a partial or corrupt
+   destination file may be overwritten and self-healed from the intact
+   source. A non-zero copy exit is not fatal; verification below decides
+   what is actually safe to delete.
 3. **Stage 2 - verify**: `rclone check --download --one-way`, a
    byte-for-byte verification. This is required because the SMB backend
    exposes no hashes, so size/modtime alone is not sufficient. Produces
    matched/differ/missing/errors lists.
-4. **Gate**: proceed only if differ/missing/errors are all empty.
+4. **Gate**: per-file, not all-or-nothing. Only files that match
+   byte-for-byte are eligible for deletion; a file that still differs or is
+   missing does not block the others - it stays on the Vault and is
+   retried on the next pass.
 5. **Stage 3 - delete source**: `rclone delete --files-from matched.txt` on
-   the Vault (deletes only byte-verified files), followed by `rmdir` of any
-   emptied album directories.
+   the Vault (deletes only the files that were byte-verified this pass,
+   even if other files in the same batch still differ or are missing),
+   followed by `rmdir` of any emptied album directories.
 6. **Reindex**: once per drain (when the Vault is idle, its `Music/` folder
    is empty, and something was deleted this batch), `POST
    http://<vault>:11000/Reindex` with body `reindex=1` to refresh the BlueOS
@@ -68,13 +77,22 @@ One pass runs every `POLL_INTERVAL` seconds, single-instance enforced via
 
 ## Safety & self-heal
 
-- No source file is ever deleted without a byte-verified match.
-- `rclone check` differences are not fatal - they are simply retried on the
-  next pass.
-- The destination is additive; nothing is deleted there.
-- Every stage is idempotent/convergent. After a power loss or crash, the
-  next pass resumes from actual state; a half-copied file never appears in
-  `matched.txt`, so it is never deleted from the source.
+- Copy is not immutable: the Vault source is authoritative and is never
+  deleted until byte-verified on the destination, so `rclone copy` may
+  overwrite a partial or corrupt destination file with the intact source,
+  self-healing it.
+- Verification and deletion are per-file, not all-or-nothing: only files
+  that are byte-verified identical on the destination are deleted from the
+  Vault. A single unverified or corrupt file (e.g. a partial copy from an
+  interrupted transfer) never blocks the others - it stays on the Vault
+  and is retried on the next pass.
+- The destination is never deleted from. Destination files may be
+  overwritten (to self-heal a partial/corrupt transfer or replace a
+  re-rip), but nothing is ever removed there.
+- Every stage is idempotent/convergent. A source file is deleted only
+  after that exact file is byte-verified on the destination, so a crash or
+  power loss mid-copy leaves the intact source in place; the next pass
+  simply retries and self-heals.
 
 ## Status UI
 

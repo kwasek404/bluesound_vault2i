@@ -83,69 +83,88 @@ elif [[ "${pending_files}" -eq 0 ]]; then
     # --- 5. idle-confirmed, nothing to move ---------------------------------
     action="idle_empty"
 else
-    # --- 6. idle-confirmed, transfer pipeline --------------------------------
+    # --- 6. idle-confirmed, transfer pipeline (per-file resilient) -----------
+    # Copy is deliberately NOT --immutable. The Vault source is authoritative
+    # and is never deleted until byte-verified on the destination, so rclone
+    # is allowed to overwrite a partial/corrupt destination file with the
+    # intact source and self-heal it. A non-zero copy exit is non-fatal here:
+    # a partial copy still transferred the other files, and the per-file
+    # verification below decides what is safe to delete. One bad file never
+    # blocks the rest.
     log "INFO" "Starting copy: ${SRC} -> ${DST}"
-    rclone copy "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" --immutable \
+    rclone copy "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" \
         "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" "${SRC}" "${DST}"
     copy_rc=$?
-
     if [[ "${copy_rc}" -ne 0 ]]; then
-        log "ERROR" "rclone copy failed with exit code ${copy_rc}"
-        action="copy_error"
-        errors=1
-    else
-        matched_file="${STATE_DIR}/matched.txt"
-        differ_file="${STATE_DIR}/differ.txt"
-        missing_file="${STATE_DIR}/missing.txt"
-        errors_file="${STATE_DIR}/errors.txt"
-        : > "${matched_file}"
-        : > "${differ_file}"
-        : > "${missing_file}"
-        : > "${errors_file}"
-
-        log "INFO" "Starting verification check: ${SRC} -> ${DST}"
-        rclone check --download --one-way "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" \
-            "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" \
-            --match "${matched_file}" --differ "${differ_file}" \
-            --missing-on-dst "${missing_file}" --error "${errors_file}" \
-            "${SRC}" "${DST}"
-
-        verified="$(wc -l < "${matched_file}")"
-        differ="$(wc -l < "${differ_file}")"
-        missing="$(wc -l < "${missing_file}")"
-        check_errors="$(wc -l < "${errors_file}")"
-        copied="${verified}"
-        errors="${check_errors}"
-
-        if [[ "${differ}" -gt 0 || "${missing}" -gt 0 || "${check_errors}" -gt 0 ]]; then
-            log "WARN" "Verification mismatch: differ=${differ} missing=${missing} errors=${check_errors} - will retry next tick"
-            action="verify_mismatch"
-        elif [[ "${verified}" -gt 0 ]]; then
-            log "INFO" "Deleting ${verified} verified files from vault source"
-            rclone delete "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" \
-                "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" \
-                --files-from "${matched_file}" "${SRC}"
-            delete_rc=$?
-            if [[ "${delete_rc}" -ne 0 ]]; then
-                log "ERROR" "rclone delete failed with exit code ${delete_rc}"
-                action="delete_error"
-                errors=1
-            else
-                rclone rmdirs --leave-root "${RCLONE_HDD_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" "${SRC}"
-                deleted="${verified}"
-                action="moved"
-                pending_reindex="true"
-            fi
-        else
-            # Nothing matched but no differences/errors either - unusual,
-            # nothing to delete this tick.
-            action="verify_empty"
-        fi
-
-        # Recompute after the copy attempt so state reflects reality.
-        pending_files="$(count_pending_files)"
-        pending_albums="$(count_pending_albums)"
+        log "WARN" "rclone copy returned ${copy_rc} (partial) - verification will sort files per-file"
     fi
+
+    matched_file="${STATE_DIR}/matched.txt"
+    differ_file="${STATE_DIR}/differ.txt"
+    missing_file="${STATE_DIR}/missing.txt"
+    errors_file="${STATE_DIR}/errors.txt"
+    : > "${matched_file}"
+    : > "${differ_file}"
+    : > "${missing_file}"
+    : > "${errors_file}"
+
+    log "INFO" "Starting verification check: ${SRC} -> ${DST}"
+    rclone check --download --one-way "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" \
+        "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" \
+        --match "${matched_file}" --differ "${differ_file}" \
+        --missing-on-dst "${missing_file}" --error "${errors_file}" \
+        "${SRC}" "${DST}"
+
+    verified="$(wc -l < "${matched_file}")"
+    differ="$(wc -l < "${differ_file}")"
+    missing="$(wc -l < "${missing_file}")"
+    check_errors="$(wc -l < "${errors_file}")"
+    copied="${verified}"
+
+    # Per-file delete: remove ONLY the byte-verified files from the Vault,
+    # regardless of whether other files still differ or are missing. This is
+    # the core resilience property - an unverified file (e.g. a corrupt
+    # duplicate) is left on the Vault and retried next pass, and never blocks
+    # the deletion of files that WERE byte-verified this pass.
+    delete_error=0
+    if [[ "${verified}" -gt 0 ]]; then
+        log "INFO" "Deleting ${verified} byte-verified files from vault source"
+        # No --exclude here: --files-from lists the exact files (already
+        # exclude-filtered by the check above), and rclone forbids combining
+        # --files-from with other filters.
+        rclone delete "${RCLONE_HDD_FLAGS[@]}" \
+            "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" \
+            --files-from "${matched_file}" "${SRC}"
+        delete_rc=$?
+        if [[ "${delete_rc}" -ne 0 ]]; then
+            log "ERROR" "rclone delete failed with exit code ${delete_rc}"
+            delete_error=1
+        else
+            rclone rmdirs --leave-root "${RCLONE_HDD_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" "${SRC}"
+            deleted="${verified}"
+            pending_reindex="true"
+        fi
+    fi
+
+    # Hard errors (red banner / block power-off) are ONLY genuine rclone check
+    # errors and delete failures. differ/missing are transient: they keep
+    # pending_files > 0 (which independently keeps the banner red until every
+    # file is migrated) and are simply retried next pass.
+    errors=$(( check_errors + delete_error ))
+
+    if [[ "${errors}" -gt 0 ]]; then
+        action="transfer_error"
+    elif [[ "${differ}" -gt 0 || "${missing}" -gt 0 ]]; then
+        action="partial_retry"
+    elif [[ "${deleted}" -gt 0 ]]; then
+        action="moved"
+    else
+        action="verify_empty"
+    fi
+
+    # Recompute after the transfer attempt so state reflects reality.
+    pending_files="$(count_pending_files)"
+    pending_albums="$(count_pending_albums)"
 fi
 
 # --- 8. reindex, only once, after a confirmed full drain --------------------

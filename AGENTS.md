@@ -88,14 +88,19 @@ credentials file tracked by git.
 
 ## Safety rules
 
-- The move is COPY -> VERIFY -> DELETE-source. NEVER delete a local rip before
-  the destination copy is verified (size + checksum).
+- The move is COPY -> VERIFY -> DELETE-source, applied PER-FILE: a source
+  file is deleted only if that exact file is byte-verified identical on the
+  destination. A single unverified or corrupt file never blocks the others -
+  it stays on the Vault and is retried on the next pass.
 - Never touch the Vault's `rips/` working dir (a rip may be in progress). Only
   operate on completed `Music/` entries.
 - A rip must be detected as COMPLETE and stable before it is moved (BlueOS emits
   no "rip finished" event - completion detection is an open design point below).
-- Never delete anything on the TrueNAS (additive destination) unless a mirror
-  policy is explicitly chosen and approved.
+- Never DELETE anything on the TrueNAS (additive destination) unless a mirror
+  policy is explicitly chosen and approved. Destination files MAY be
+  OVERWRITTEN to self-heal a partial/corrupt transfer from the authoritative
+  Vault source (a deliberate relaxation of the previous never-overwrite
+  stance, since the source stays intact until byte-verified).
 - Exclude junk metadata: `.DS_Store`, `._*`, `.prmscan`, `.Trashes`,
   `.Spotlight-*`.
 
