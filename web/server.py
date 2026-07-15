@@ -162,7 +162,7 @@ def _entry_name(entry):
     return entry.get("name") if isinstance(entry, dict) else str(entry)
 
 
-def fetch_transfer_progress():
+def fetch_transfer_progress(pending_files=0):
     """Poll rclone's rc core/stats endpoint for live transfer progress.
 
     Returns {"active": False, "phase": <phase>} when no rclone op is running
@@ -195,7 +195,9 @@ def fetch_transfer_progress():
 
     if phase == "verify":
         files_done = checks
-        files_total = total_checks
+        stable_total = int(pending_files or 0)
+        files_total = stable_total if stable_total > 0 else total_checks
+        files_total = max(files_total, files_done)
         current_file = _entry_name(checking[0]) if checking else None
     else:
         files_done = transfers
@@ -288,7 +290,7 @@ class StatusRequestHandler(BaseHTTPRequestHandler):
             "ripping": rip_status["ripping"],
             "encoding": rip_status["encoding"],
         }
-        response["transfer"] = fetch_transfer_progress()
+        response["transfer"] = fetch_transfer_progress(state.get("pending_music_files", 0))
         self._send_json(200, response)
 
     def _handle_api_log(self):
