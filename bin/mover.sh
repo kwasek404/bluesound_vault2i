@@ -97,7 +97,7 @@ else
     # blocks the rest.
     set_phase copy
     log "INFO" "Starting copy: ${SRC} -> ${DST}"
-    rclone copy "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" \
+    rclone copy --check-first "${RCLONE_EXCLUDES[@]}" "${RCLONE_HDD_FLAGS[@]}" \
         "${RCLONE_RETRY_FLAGS[@]}" "${RCLONE_LOG_FLAGS[@]}" "${RCLONE_RC_FLAGS[@]}" "${SRC}" "${DST}"
     copy_rc=$?
     if [[ "${copy_rc}" -ne 0 ]]; then
