@@ -175,3 +175,29 @@ main {
   background: var(--safe-bg);
   border-radius: 6px;
 }
+
+.live-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: var(--safe-bg);
+  animation: live-dot-pulse 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+@keyframes live-dot-pulse {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(30, 107, 60, 0.6);
+  }
+  70% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 6px rgba(30, 107, 60, 0);
+  }
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(30, 107, 60, 0);
+  }
+}

@@ -5,8 +5,10 @@ Stdlib-only HTTP server. Serves a static Polish-language status page and two
 JSON API endpoints that expose the mover's state.json and mover.log.
 """
 
+import html
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -71,19 +73,75 @@ def read_state():
         return dict(DEFAULT_STATE), False
 
 
-def fetch_live_vault_idle():
-    """Fetch the Vault ripencstat endpoint and determine idle status.
+_EMPTY_TRACK = {"active": False, "track": None, "title": None, "artist_album": None}
 
-    Returns True/False on success, None if the fetch failed.
+
+def _strip_tags(s):
+    return re.sub(r"<[^>]+>", "", s)
+
+
+def _clean_body(body):
+    # Remove HTML comments so commented-out template <li> examples are not parsed.
+    return re.sub(r"<!--.*?-->", "", body, flags=re.S)
+
+
+def _section_li(clean_body, heading):
+    # Return the inner HTML of the first <li>...</li> that appears AFTER the
+    # given section heading text, or None. clean_body must already have
+    # comments stripped.
+    idx = clean_body.find(heading)
+    if idx < 0:
+        return None
+    m = re.search(r"<li[^>]*>(.*?)</li>", clean_body[idx:], flags=re.S)
+    return m.group(1) if m else None
+
+
+def _parse_track_li(inner):
+    """Parse the inner HTML of a rip/encode status <li> into a track dict."""
+    if inner is None:
+        return dict(_EMPTY_TRACK)
+    text = inner.strip()
+    m = re.search(r"Track\s+(\d+)\s*:\s*(.*)", text, flags=re.S)
+    if not m:
+        # idle strings ("No CD inserted." / "No tracks to encode.") or anything non-track
+        return dict(_EMPTY_TRACK)
+    track = int(m.group(1))
+    rest = m.group(2)
+    parts = re.split(r"<br\s*/?>", rest, maxsplit=1)
+    title = html.unescape(_strip_tags(parts[0])).strip() or None
+    artist_album = (
+        html.unescape(_strip_tags(parts[1])).strip() if len(parts) > 1 else None
+    )
+    if artist_album == "":
+        artist_album = None
+    return {"active": True, "track": track, "title": title, "artist_album": artist_album}
+
+
+def fetch_rip_status():
+    """Fetch the Vault ripencstat endpoint and parse rip/encode status.
+
+    Returns a dict with "reachable" (bool), "idle" (True/False/None - None
+    when unreachable, matching the previous live_vault_idle contract),
+    "ripping" and "encoding" track dicts. Never raises.
     """
     try:
         with urllib.request.urlopen(
             VAULT_STATUS_URL, timeout=VAULT_STATUS_TIMEOUT_SECS
         ) as resp:
             body = resp.read().decode("utf-8", errors="replace")
-        return "No CD inserted." in body and "No tracks to encode." in body
     except (urllib.error.URLError, OSError, ValueError):
-        return None
+        return {
+            "reachable": False,
+            "idle": None,
+            "ripping": dict(_EMPTY_TRACK),
+            "encoding": dict(_EMPTY_TRACK),
+        }
+
+    clean = _clean_body(body)
+    idle = "No CD inserted." in clean and "No tracks to encode." in clean
+    ripping = _parse_track_li(_section_li(clean, "CD Ripping Status"))
+    encoding = _parse_track_li(_section_li(clean, "Encoding Status (FLAC)"))
+    return {"reachable": True, "idle": idle, "ripping": ripping, "encoding": encoding}
 
 
 def read_phase():
@@ -223,7 +281,13 @@ class StatusRequestHandler(BaseHTTPRequestHandler):
         state, state_available = read_state()
         response = dict(state)
         response["state_available"] = state_available
-        response["live_vault_idle"] = fetch_live_vault_idle()
+        rip_status = fetch_rip_status()
+        response["live_vault_idle"] = rip_status["idle"]
+        response["rip"] = {
+            "reachable": rip_status["reachable"],
+            "ripping": rip_status["ripping"],
+            "encoding": rip_status["encoding"],
+        }
         response["transfer"] = fetch_transfer_progress()
         self._send_json(200, response)
 

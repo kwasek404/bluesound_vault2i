@@ -16,7 +16,7 @@
 <p id="connection-note" class="connection-note" hidden>(brak połączenia z serwerem statusu)</p>
 
 <main>
-  <section id="transfer" class="card" hidden>
+  <section id="transfer" class="card">
     <h2>Transfer w toku</h2>
     <div class="progress-row">
       <progress id="transfer-bar" max="100" value="0"></progress>
@@ -37,6 +37,15 @@
 
       <dt>Pozostało (ETA)</dt>
       <dd id="transfer-eta">-</dd>
+    </dl>
+  </section>
+
+  <section id="rip" class="card">
+    <h2><span class="live-dot"></span>Ripowanie (Bluesound)</h2>
+    <dl class="fields">
+      <dt>Zgrywanie</dt><dd id="rip-ripping">-</dd>
+      <dt>Kodowanie FLAC</dt><dd id="rip-encoding">-</dd>
+      <dt>Album</dt><dd id="rip-album">-</dd>
     </dl>
   </section>
 

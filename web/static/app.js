@@ -18,7 +18,6 @@
   var pendingReindexEl = document.getElementById("pending-reindex");
   var lastReindexEl = document.getElementById("last-reindex");
   var logEl = document.getElementById("log");
-  var transferEl = document.getElementById("transfer");
   var transferBarEl = document.getElementById("transfer-bar");
   var transferPercentEl = document.getElementById("transfer-percent");
   var transferPhaseEl = document.getElementById("transfer-phase");
@@ -26,6 +25,9 @@
   var transferFilesEl = document.getElementById("transfer-files");
   var transferSpeedEl = document.getElementById("transfer-speed");
   var transferEtaEl = document.getElementById("transfer-eta");
+  var ripRippingEl = document.getElementById("rip-ripping");
+  var ripEncodingEl = document.getElementById("rip-encoding");
+  var ripAlbumEl = document.getElementById("rip-album");
 
   var ACTION_LABELS = {
     skipped_busy: "Vault zajęty - pomijam",
@@ -152,6 +154,7 @@
     lastReindexEl.textContent = textOrBrak(status.last_reindex_at);
 
     renderTransfer(status.transfer);
+    renderRip(status.rip);
   }
 
   function formatSpeed(bytesPerSec) {
@@ -185,11 +188,15 @@
 
   function renderTransfer(transfer) {
     if (!transfer || transfer.active !== true) {
-      transferEl.hidden = true;
+      transferBarEl.value = 0;
+      transferPercentEl.textContent = "-";
+      transferPhaseEl.textContent = "Bezczynny";
+      transferFileEl.textContent = "-";
+      transferFilesEl.textContent = "-";
+      transferSpeedEl.textContent = "-";
+      transferEtaEl.textContent = "-";
       return;
     }
-
-    transferEl.hidden = false;
 
     var percent = transfer.percent;
     if (typeof percent !== "number" || isNaN(percent)) {
@@ -211,6 +218,26 @@
 
     transferSpeedEl.textContent = formatSpeed(transfer.speed);
     transferEtaEl.textContent = formatEta(transfer.eta_seconds);
+  }
+
+  function renderRip(rip) {
+    var ripping = (rip && rip.ripping) || {};
+    var encoding = (rip && rip.encoding) || {};
+
+    ripRippingEl.textContent = ripping.active
+      ? "Ścieżka " + ripping.track + ": " + textOrDash(ripping.title)
+      : "-";
+    ripEncodingEl.textContent = encoding.active
+      ? "Ścieżka " + encoding.track + ": " + textOrDash(encoding.title)
+      : "-";
+
+    if (ripping.active && ripping.artist_album) {
+      ripAlbumEl.textContent = ripping.artist_album;
+    } else if (encoding.active && encoding.artist_album) {
+      ripAlbumEl.textContent = encoding.artist_album;
+    } else {
+      ripAlbumEl.textContent = "-";
+    }
   }
 
   function renderLog(logData) {
