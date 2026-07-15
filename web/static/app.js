@@ -19,6 +19,18 @@
   var lastReindexEl = document.getElementById("last-reindex");
   var logEl = document.getElementById("log");
 
+  var ACTION_LABELS = {
+    skipped_busy: "Vault zajęty - pomijam",
+    idle_empty: "Bezczynny - nic do przeniesienia",
+    moved: "Przeniesiono",
+    partial_retry: "Część plików czeka na ponowną próbę",
+    transfer_error: "Błąd transferu - sprawdź log",
+    verify_empty: "Brak plików do weryfikacji",
+    copy_error: "Błąd kopiowania - sprawdź log",
+    delete_error: "Błąd kasowania źródła - sprawdź log",
+    verify_mismatch: "Rozbieżność weryfikacji - ponawiam",
+  };
+
   function textOrDash(value) {
     if (value === null || value === undefined || value === "") {
       return "-";
@@ -31,6 +43,13 @@
       return "brak";
     }
     return String(value);
+  }
+
+  function actionLabel(code) {
+    if (!code) {
+      return textOrBrak(code);
+    }
+    return ACTION_LABELS[code] || code;
   }
 
   function boolToTakNie(value) {
@@ -112,7 +131,7 @@
     updatedAtEl.textContent = textOrBrak(status.updated_at);
 
     var lastRun = status.last_run || {};
-    lastActionEl.textContent = textOrBrak(lastRun.action);
+    lastActionEl.textContent = actionLabel(lastRun.action);
     lastVerifiedEl.textContent = textOrDash(lastRun.verified);
     lastDeletedEl.textContent = textOrDash(lastRun.deleted);
     lastDifferEl.textContent = textOrDash(lastRun.differ);
