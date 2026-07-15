@@ -131,14 +131,45 @@ Environment variables, with defaults:
 | `LOG_DIR` | `/log` | Logs (bind-mounted) |
 | `RCLONE_CONFIG` | `/state/rclone.conf` | Generated at container startup |
 
-## Deployment on TrueNAS
+## Deployment on TrueNAS (Custom App - Install via YAML)
 
-1. Create a dataset for state/logs.
-2. Use `docker-compose.yml`, replacing the `/mnt/YOURPOOL/...` host paths
-   with the real dataset paths.
-3. Set `TRUENAS_SMB_PASSWORD` in the app environment.
-4. Deploy as a TrueNAS Custom App (Docker Compose).
-5. Open the status UI on port `8080`.
+Target system: pool `HDD` (the only pool), SMB share `shared` at
+`/mnt/HDD/shared`. The container runs as the TrueNAS `apps` identity
+(UID/GID 568).
+
+One-time prerequisites:
+
+1. Initialize the Apps subsystem if it has never been set up: Apps ->
+   Settings -> Choose Pool -> `HDD`. This creates the `ix-apps` dataset.
+
+2. Create a dataset for persistent state and logs: Datasets -> select `HDD`
+   -> Add Dataset -> name it `bluesound_vault2i` (mountpoint
+   `/mnt/HDD/bluesound_vault2i`). Create two subdirectories inside it,
+   `state` and `log`.
+
+3. Give the `apps` identity (UID/GID 568) ownership of that dataset:
+   Datasets -> `HDD/bluesound_vault2i` -> Permissions -> Edit -> owner user
+   `apps`, owner group `apps`, apply recursively. Without this the container
+   gets a permission error on the `/state` and `/log` bind mounts.
+
+Deploy:
+
+4. Apps -> Discover Apps -> the three-dot menu -> Install via YAML. Paste the
+   contents of `docker-compose.yml` with ONE change: replace the
+   `TRUENAS_SMB_PASSWORD` value with your literal SMB password. The
+   `${TRUENAS_SMB_PASSWORD:?...}` shell form is NOT resolved by the panel and
+   will fail deployment. The plaintext password then lives only in the
+   TrueNAS app config (redacted from logs); never commit it.
+
+5. Install. TrueNAS normalizes the pasted compose (adds hardening options,
+   resource limits, an auto-generated name) - this is expected; the app still
+   runs your image.
+
+6. Open the status UI at `http://192.168.0.200:8080`.
+
+The bind-mounted `/state` and `/log` under `/mnt/HDD/bluesound_vault2i` survive
+TrueNAS OS upgrades; the app config (including the password) lives in the
+TrueNAS configuration database.
 
 ## Vault playback reconfiguration
 

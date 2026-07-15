@@ -5,15 +5,15 @@
 # Before deploying:
 #   - Set TRUENAS_SMB_PASSWORD in the app's environment configuration
 #     (TrueNAS UI "Custom App" -> Compose environment). NEVER commit it here.
-#   - Replace both /mnt/YOURPOOL/... volume paths below with the real pool
-#     dataset path (e.g. /mnt/tank/apps/bluesound-mover/...).
+#   - The volume paths below target dataset HDD/bluesound_vault2i, which
+#     must exist with apps (UID/GID 568) ownership before deploy - see the
+#     README "Deployment on TrueNAS" section.
 #
 # The status UI is served on port 8080 (http://<truenas-host>:8080/).
 
 services:
   bluesound-mover:
     image: ghcr.io/kwasek404/bluesound_vault2i:latest
-    container_name: bluesound-mover
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -43,7 +43,7 @@ services:
       # LOG_DIR: "/log"                # default: /log
       # RCLONE_CONFIG: "/state/rclone.conf"  # default: /state/rclone.conf
     volumes:
-      # Host Path bind mounts to a pool dataset so state/logs survive OS
-      # upgrades. Replace YOURPOOL with the actual pool name.
-      - /mnt/YOURPOOL/apps/bluesound-mover/state:/state
-      - /mnt/YOURPOOL/apps/bluesound-mover/log:/log
+      # Host Path bind mounts to dataset HDD/bluesound_vault2i so state/logs
+      # survive OS upgrades.
+      - /mnt/HDD/bluesound_vault2i/state:/state
+      - /mnt/HDD/bluesound_vault2i/log:/log
