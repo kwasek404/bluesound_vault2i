@@ -1,0 +1,49 @@
+# Bluesound Vault 2i -> TrueNAS mover.
+#
+# Deployed on TrueNAS 25.10.4 as a Custom App (Docker Compose).
+#
+# Before deploying:
+#   - Set TRUENAS_SMB_PASSWORD in the app's environment configuration
+#     (TrueNAS UI "Custom App" -> Compose environment). NEVER commit it here.
+#   - Replace both /mnt/YOURPOOL/... volume paths below with the real pool
+#     dataset path (e.g. /mnt/tank/apps/bluesound-mover/...).
+#
+# The status UI is served on port 8080 (http://<truenas-host>:8080/).
+
+services:
+  bluesound-mover:
+    image: ghcr.io/kwasek404/bluesound_vault2i:latest
+    container_name: bluesound-mover
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # -- Vault (source) --
+      VAULT_HOST: "192.168.0.20"       # default: 192.168.0.20
+      # VAULT_STATUS_PORT: "2000"      # default: 2000
+      # VAULT_API_PORT: "11000"        # default: 11000
+
+      # -- TrueNAS (destination) --
+      TRUENAS_HOST: "192.168.0.200"    # default: 192.168.0.200
+      TRUENAS_SMB_USER: "smb"          # default: smb
+      TRUENAS_SMB_PASSWORD: "${TRUENAS_SMB_PASSWORD:?set in the TrueNAS app config, never commit}"
+
+      # -- Shares / paths --
+      # SMB_SHARE: "shared"            # default: shared
+      # SRC_SUBPATH: "Music"           # default: Music
+      # DST_SUBPATH: "Music"           # default: Music
+
+      # -- Mover behavior --
+      POLL_INTERVAL: "60"              # default: 60 (seconds between passes)
+      IDLE_CONFIRMATIONS: "2"          # default: 2 (consecutive idle polls before a transfer starts)
+
+      # -- Web UI / paths (rarely need overriding) --
+      # WEB_PORT: "8080"               # default: 8080
+      # STATE_DIR: "/state"            # default: /state
+      # LOG_DIR: "/log"                # default: /log
+      # RCLONE_CONFIG: "/state/rclone.conf"  # default: /state/rclone.conf
+    volumes:
+      # Host Path bind mounts to a pool dataset so state/logs survive OS
+      # upgrades. Replace YOURPOOL with the actual pool name.
+      - /mnt/YOURPOOL/apps/bluesound-mover/state:/state
+      - /mnt/YOURPOOL/apps/bluesound-mover/log:/log

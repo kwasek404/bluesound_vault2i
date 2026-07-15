@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status przenoszenia ripów Bluesound -> TrueNAS</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<header>
+  <h1>Status przenoszenia ripów Bluesound -&gt; TrueNAS</h1>
+</header>
+
+<div id="verdict" class="verdict warn">Ładowanie danych...</div>
+<p id="connection-note" class="connection-note" hidden>(brak połączenia z serwerem statusu)</p>
+
+<main>
+  <section class="card">
+    <h2>Stan urządzenia</h2>
+    <dl class="fields">
+      <dt>Status urządzenia</dt>
+      <dd id="vault-status">-</dd>
+
+      <dt>Liczba plików oczekujących</dt>
+      <dd id="pending-files">-</dd>
+
+      <dt>Liczba albumów oczekujących</dt>
+      <dd id="pending-albums">-</dd>
+
+      <dt>Ostatnia aktualizacja</dt>
+      <dd id="updated-at">-</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Ostatni przebieg</h2>
+    <dl class="fields">
+      <dt>Akcja</dt>
+      <dd id="last-action">-</dd>
+
+      <dt>Przeniesione / zweryfikowane</dt>
+      <dd id="last-verified">-</dd>
+
+      <dt>Usunięte</dt>
+      <dd id="last-deleted">-</dd>
+
+      <dt>Różniące się</dt>
+      <dd id="last-differ">-</dd>
+
+      <dt>Brakujące</dt>
+      <dd id="last-missing">-</dd>
+
+      <dt>Błędy</dt>
+      <dd id="last-errors">-</dd>
+
+      <dt>Reindeks oczekuje</dt>
+      <dd id="pending-reindex">-</dd>
+
+      <dt>Ostatni reindeks</dt>
+      <dd id="last-reindex">-</dd>
+    </dl>
+  </section>
+
+  <section class="card log-card">
+    <h2>Log (najnowsze na górze)</h2>
+    <pre id="log">Ładowanie logu...</pre>
+  </section>
+</main>
+
+</body>
+</html>

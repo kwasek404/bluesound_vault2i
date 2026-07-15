@@ -137,7 +137,10 @@ custom image bundling rclone/smbclient (base images usually lack smbclient).
 
 ## Repo status
 
-Fresh, empty repository (branch `main`, no commits). No implementation yet.
+The repository is on branch `main` with commits in place and the mover fully
+implemented: the shell mover and shared lib, a Python stdlib status UI,
+Dockerfile/entrypoint/docker-compose for the TrueNAS Custom App deployment,
+and a GitHub Actions workflow publishing the image to GHCR.
 
 ## Conventions
 

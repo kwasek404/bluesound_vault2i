@@ -1,0 +1,137 @@
+:root {
+  --bg: #12161c;
+  --bg-card: #1b212b;
+  --border: #2c3542;
+  --text: #e8ecf1;
+  --text-dim: #9aa7b6;
+  --safe-bg: #1e6b3c;
+  --safe-text: #eafff1;
+  --busy-bg: #8a1f1f;
+  --busy-text: #fff0f0;
+  --warn-bg: #8a5a12;
+  --warn-text: #fff6e6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Verdana, Arial, sans-serif;
+  line-height: 1.4;
+}
+
+header {
+  padding: 1rem 1.25rem 0.5rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.verdict {
+  margin: 0.75rem 1.25rem;
+  padding: 1.25rem;
+  border-radius: 8px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.verdict.safe {
+  background: var(--safe-bg);
+  color: var(--safe-text);
+}
+
+.verdict.busy {
+  background: var(--busy-bg);
+  color: var(--busy-text);
+}
+
+.verdict.warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.connection-note {
+  margin: 0 1.25rem 0.75rem;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+main {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  padding: 0 1.25rem 1.5rem;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.card h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 1rem;
+  row-gap: 0.5rem;
+  margin: 0;
+}
+
+.fields dt {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.fields dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.log-card {
+  grid-column: 1 / -1;
+}
+
+#log {
+  margin: 0;
+  max-height: 420px;
+  overflow-y: auto;
+  background: #0b0e12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-family: "Consolas", "DejaVu Sans Mono", monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+
+@media (max-width: 480px) {
+  .fields {
+    grid-template-columns: 1fr;
+  }
+  .fields dd {
+    text-align: left;
+  }
+}
